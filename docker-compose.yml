@@ -1,0 +1,39 @@
+services:
+  free-deepseek-api:
+    image: free-deepseek-api:latest
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: free-deepseek-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9655:9655"   # Bind to loopback; put nginx/caddy in front for TLS
+    volumes:
+      # Auth accounts directory — all *.json files inside are loaded as accounts.
+      # Replace files here to rotate sessions without touching the container.
+      # Single account:  copy deepseek-auth.json into ./data/auth/
+      # Multi-account:   copy account1.json, account2.json, ... into ./data/auth/
+      - ./data/auth:/data/auth:ro
+    environment:
+      DEEPSEEK_AUTH_DIR: /data/auth
+      # Optional: protect the proxy with an API key
+      # PROXY_API_KEY: "your-secret-key-here"
+      # REQUIRE_PROXY_API_KEY: "1"
+      #
+      # Optional: tune behavior
+      # DEEPSEEK_ACCOUNT_COOLDOWN_MS: "600000"   # 10min (default) cooldown on 401/403/429
+      # DEEPSEEK_REQUEST_DEADLINE_MS: "120000"   # 2min (default) per-request deadline
+      # DEEPSEEK_MAX_CONCURRENT: "24"            # Max parallel in-flight requests
+      # DEEPSEEK_MAX_RETRIES: "2"               # Retries on empty/timeout response
+    healthcheck:
+      test: ["CMD", "node", "-e",
+        "const http=require('http');const req=http.get({host:'127.0.0.1',port:9655,path:'/health'},res=>{res.resume();process.exit(res.statusCode===200?0:1)});req.on('error',()=>process.exit(1));req.setTimeout(4000,()=>{req.destroy();process.exit(1)})"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
