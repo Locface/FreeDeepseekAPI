@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ForgetMeAI/FreeDeepseekAPI/blob/main/LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
+  <a href="https://github.com/Locface/FreeDeepseekAPI/blob/main/LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green.svg" /></a>
   <img alt="Node.js 18 plus" src="https://img.shields.io/badge/node-18%2B-339933.svg" />
   <img alt="No npm dependencies" src="https://img.shields.io/badge/dependencies-0-blue.svg" />
   <img alt="OpenAI compatible" src="https://img.shields.io/badge/OpenAI-compatible-111111.svg" />
@@ -26,7 +26,6 @@ FreeDeepseekAPI поднимает локальный API-сервер для **
 
 > ⚠️ Это экспериментальный web-chat proxy. DeepSeek может менять внутренний Web API без предупреждения. Для production-кейсов надёжнее официальный платный API DeepSeek.
 
-ForgetMeAI: https://t.me/forgetmeai
 
 ---
 
@@ -38,6 +37,7 @@ ForgetMeAI: https://t.me/forgetmeai
 - [Windows запуск](#-windows-запуск)
 - [Linux / Chromium запуск](#-linux--chromium-запуск)
 - [VPS / headless запуск](#-vps--headless-запуск)
+- [Docker Compose](#-docker-compose-рекомендуется-для-серверного-запуска)
 - [Rootless Podman](#-rootless-podman)
 - [Diagnostics / doctor](#-diagnostics--doctor)
 - [Session reuse и сброс чатов](#-session-reuse-и-сброс-чатов)
@@ -88,7 +88,7 @@ ForgetMeAI: https://t.me/forgetmeai
 ## ⚡ Быстрый старт
 
 ```bash
-git clone https://github.com/ForgetMeAI/FreeDeepseekAPI.git
+git clone https://github.com/Locface/FreeDeepseekAPI.git
 cd FreeDeepseekAPI
 npm run auth
 npm start
@@ -142,7 +142,7 @@ Browser-запросы разрешены с loopback-origin. Если UI отк
 ## 🪟 Windows запуск
 
 ```powershell
-git clone https://github.com/ForgetMeAI/FreeDeepseekAPI.git
+git clone https://github.com/Locface/FreeDeepseekAPI.git
 cd FreeDeepseekAPI
 npm run auth
 npm start
@@ -162,7 +162,7 @@ npm run auth
 ## 🐧 Linux / Chromium запуск
 
 ```bash
-git clone https://github.com/ForgetMeAI/FreeDeepseekAPI.git
+git clone https://github.com/Locface/FreeDeepseekAPI.git
 cd FreeDeepseekAPI
 CHROME_PATH=$(which chromium) npm run auth
 npm start
@@ -215,6 +215,52 @@ DEEPSEEK_TOKEN="<token>" npm run auth:import -- --input ./cookies.json
 ```
 
 > Важно: `deepseek-auth.json` — это доступ к вашему DeepSeek Web login. Не коммитьте, не публикуйте, храните с правами `0600`.
+
+---
+
+## 🐳 Docker Compose (рекомендуется для серверного запуска)
+
+Самый простой способ запустить на сервере — через `docker compose`. Сессии меняются без пересборки образа: просто заменяете файл в `./data/auth/` и перезапускаете контейнер.
+
+1. Клонируйте репозиторий и получите авторизационный файл (через `npm run auth` на машине с браузером):
+
+```bash
+git clone https://github.com/Locface/FreeDeepseekAPI.git
+cd FreeDeepseekAPI
+# скопируйте deepseek-auth.json с машины где выполнили npm run auth:
+cp /path/to/deepseek-auth.json ./data/auth/account1.json
+```
+
+2. Соберите образ и запустите:
+
+```bash
+docker compose up -d --build
+```
+
+3. Проверьте:
+
+```bash
+curl http://localhost:9655/health
+curl http://localhost:9655/v1/models
+```
+
+**Обновить сессию без пересборки:**
+
+```bash
+cp new-deepseek-auth.json ./data/auth/account1.json
+docker compose restart
+```
+
+**Несколько аккаунтов** — просто кладёте несколько файлов в `./data/auth/`:
+
+```bash
+cp acc1.json ./data/auth/account1.json
+cp acc2.json ./data/auth/account2.json
+docker compose restart
+# при 401/403/429 на одном аккаунте proxy автоматически переключается на другой
+```
+
+Настройка порта, API-ключа и лимитов — через переменные в `docker-compose.yml` (все закомментированы с пояснениями).
 
 ---
 
@@ -555,7 +601,9 @@ FreeDeepseekAPI принимает:
 | `deepseek-reasoner-search` | `Быстрый` / `default` | да | да | reasoning + search |
 | `deepseek-r1-search` | `Быстрый` / `default` | да | да | R1-compatible + search |
 | `deepseek-expert` | `Эксперт` / `expert` | нет | нет | Expert mode |
+| `deepseek-expert-search` | `Эксперт` / `expert` | нет | да | Expert + web search |
 | `deepseek-v4-pro` | `Эксперт` / `expert` | да | нет | Expert + reasoning |
+| `deepseek-vision` | `Распознавание` / `vision` | нет | нет | Vision / Image understanding |
 
 Полный маппинг:
 
@@ -565,13 +613,11 @@ curl http://localhost:9655/v1/model-capabilities
 
 По официальной странице DeepSeek V4 Preview `deepseek-chat` и `deepseek-reasoner` сейчас route'ятся в `deepseek-v4-flash` non-thinking/thinking. В самом `chat.deepseek.com` direct stream точное имя чекпойнта не отдаётся (`model: ""`), поэтому proxy фиксирует одновременно web-режим (`default` / `Быстрый`) и актуальную официальную маршрутизацию (`DeepSeek-V4-Flash`).
 
-Текущий вывод DeepSeek Web remote config показывает такие web-режимы:
+Текущие проверенные web-режимы DeepSeek Web:
 
 - `default` / UI `Быстрый` — работает; поддерживает `thinking_enabled` и `search_enabled`.
-- `expert` / UI `Эксперт` — работает через актуальный web-контракт (`x-client-version=2.0.0`) и поддерживает `thinking_enabled`. В `/v1/models` выдаются `deepseek-expert` без reasoning и `deepseek-v4-pro` как Expert + reasoning.
-- `vision` / UI `Распознавание` — виден в remote config, но сейчас direct Web API возвращает `backend_err_by_model` (`Vision is temporarily unavailable`). Поэтому `deepseek-vision` скрыт из `/v1/models`.
-
-Search для Expert по remote config недоступен, поэтому `deepseek-expert-search` остаётся unsupported.
+- `expert` / UI `Эксперт` — работает через актуальный web-контракт (`x-client-version=2.0.0`); поддерживает `thinking_enabled` (`deepseek-v4-pro`) и `search_enabled` (`deepseek-expert-search`).
+- `vision` / UI `Распознавание` — работает через direct Web API с загрузкой файлов (`deepseek-vision`).
 
 ---
 
