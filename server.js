@@ -439,17 +439,15 @@ const MODEL_CONFIGS = {
     },
     'deepseek-expert-search': {
         model_type: 'expert', thinking_enabled: false, search_enabled: true,
-        real_model: 'DeepSeek Web “Эксперт” + search requested, but Expert has search_feature=null in remote config',
-        capabilities: { reasoning: false, web_search: false, files: false },
-        supported: false,
-        unavailable_reason: 'Expert mode is rejected; remote config says search is not available for Expert.',
+        real_model: 'DeepSeek Web “Эксперт” + web search',
+        capabilities: { reasoning: false, web_search: true, files: false },
+        supported: true,
     },
     'deepseek-vision': {
         model_type: 'vision', thinking_enabled: false, search_enabled: false,
-        real_model: 'DeepSeek Web “Распознавание” / image understanding beta',
+        real_model: 'DeepSeek Web “Распознавание” / image understanding',
         capabilities: { reasoning: false, web_search: false, files: true, vision: true },
-        supported: false,
-        unavailable_reason: 'Current Web API returns: Vision is temporarily unavailable (backend_err_by_model).',
+        supported: true,
     },
 };
 
@@ -517,6 +515,23 @@ function applyResponsePatchOperations(ops, appendFragments) {
         }
     }
     return applied;
+}
+
+function mapQuasiStatusToFinishReason(quasiStatus) {
+    if (!quasiStatus || typeof quasiStatus !== 'string') return null;
+    switch (quasiStatus) {
+        case 'FINISHED':
+            return 'stop';
+        case 'INCOMPLETE':
+        case 'CONTEXT_LENGTH_EXCEEDED':
+            return 'length';
+        case 'CONTENT_FILTER':
+            return 'content_filter';
+        case 'TIMEOUT':
+            return 'timeout';
+        default:
+            return quasiStatus.toLowerCase();
+    }
 }
 
 function resolveModelConfig(model) {
@@ -2058,6 +2073,22 @@ const server = http.createServer(async (req, res) => {
                                 }
                                 if (lastPath === 'response' && d.v !== undefined) {
                                     applyResponsePatchOperations(d.v, appendFragments);
+                                    if (Array.isArray(d.v)) {
+                                        for (const op of d.v) {
+                                            if (op && typeof op === 'object' && op.p === 'quasi_status' && typeof op.v === 'string') {
+                                                const mapped = mapQuasiStatusToFinishReason(op.v);
+                                                if (mapped && finishReason !== 'length') {
+                                                    finishReason = mapped;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (lastPath === 'response/quasi_status' && d.v !== undefined && typeof d.v === 'string') {
+                                    const mapped = mapQuasiStatusToFinishReason(d.v);
+                                    if (mapped && finishReason !== 'length') {
+                                        finishReason = mapped;
+                                    }
                                 }
                                 if (lastPath === 'response/fragments/-1/content' && d.v !== undefined && typeof d.v !== 'object') {
                                     if (fragments.length > 0) {
@@ -2073,7 +2104,8 @@ const server = http.createServer(async (req, res) => {
                                     finishReason = d.v;
                                 }
                                 if (lastPath === 'response/status' && d.v !== undefined && d.v !== 'FINISHED') {
-                                    finishReason = d.v;
+                                    const mapped = mapQuasiStatusToFinishReason(d.v);
+                                    finishReason = mapped || d.v;
                                 }
                             } catch (e) { }
                         }
@@ -2437,6 +2469,7 @@ module.exports = {
         createUpstreamHttpError,
         rebuildFragmentText,
         applyResponsePatchOperations,
+        mapQuasiStatusToFinishReason,
         compactToolSchema,
         formatToolDefinitions,
         parseToolCall,
