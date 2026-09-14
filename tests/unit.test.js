@@ -180,6 +180,17 @@ test('DeepSeek stream parser does not treat service content chunks as model erro
   assert.equal(serverInternals.isDeepSeekModelErrorEvent({ type: 'error', content: 'backend error' }), true);
 });
 
+test('DeepSeek stream parser maps quasi_status to standard finish reasons', () => {
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('FINISHED'), 'stop');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('INCOMPLETE'), 'length');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('CONTEXT_LENGTH_EXCEEDED'), 'length');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('CONTENT_FILTER'), 'content_filter');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('TIMEOUT'), 'timeout');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason('CUSTOM_REASON'), 'custom_reason');
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason(null), null);
+  assert.equal(serverInternals.mapQuasiStatusToFinishReason(undefined), null);
+});
+
 test('consumed upstream HTTP errors retain status, type, and retry hints', () => {
   const limited = serverInternals.createUpstreamHttpError(429, '  Rate limited\ntry later  ', '12');
   assert.equal(limited.status, 429);
