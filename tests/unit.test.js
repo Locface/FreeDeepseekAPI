@@ -252,8 +252,8 @@ test('Containerfile keeps the rootless Podman runtime minimal and fail-closed', 
   assert.match(containerfile, /^USER 1000:1000$/m);
   assert.match(containerfile, /HOST=0\.0\.0\.0/);
   assert.match(containerfile, /NON_INTERACTIVE=1/);
-  assert.match(containerfile, /REQUIRE_PROXY_API_KEY=1/);
-  assert.match(containerfile, /PROXY_API_KEY_FILE=\/run\/secrets\/proxy-api-key/);
+  assert.doesNotMatch(containerfile, /REQUIRE_PROXY_API_KEY=1/); // now optional — set at runtime via docker-compose.yml
+  assert.match(containerfile, /DEEPSEEK_AUTH_DIR=\/data\/auth/); // volume-based auth, sessions rotate without rebuild
   assert.match(containerfile, /^HEALTHCHECK /m);
   assert.match(containerfile, /path:'\/health'/);
   assert.match(containerfile, /^CMD \["node", "server\.js"\]$/m);
